@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Grid Electricity Theft Detection & Control System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background-color: #f1f1f8; 
+            color: #0f172a;            
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .panel-card {
+            background-color: #f8fafc; 
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f8; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+        
+        /* Dark Mode Overrides */
+        body.dark-mode { background-color: #0f172a; color: #e2e8f0; }
+        body.dark-mode .panel-card, body.dark-mode .bg-white { background-color: #1e293b !important; border-color: #334155 !important; }
+        body.dark-mode .text-slate-900, body.dark-mode .text-slate-800, body.dark-mode .text-slate-700, body.dark-mode .text-slate-600, body.dark-mode .text-slate-500 { color: #cbd5e1 !important; }
+        body.dark-mode .bg-slate-100, body.dark-mode .bg-slate-200 { background-color: #334155 !important; color: #f8fafc !important; }
+        body.dark-mode .border-slate-300, body.dark-mode .border-b, body.dark-mode .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #475569 !important; }
+        body.dark-mode input, body.dark-mode select { background-color: #0f172a !important; color: #f8fafc !important; border-color: #475569 !important; }
+        body.dark-mode th, body.dark-mode td { border-color: #334155 !important; }
+        body.dark-mode header, body.dark-mode footer { background-color: #020617 !important; border-color: #1e293b !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- Substation Control Header -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-wrap items-center justify-between gap-4 text-white shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="p-2.5 bg-blue-600 rounded-lg text-white">
+                <i class="fa-solid fa-bolt text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-100 tracking-wide">
+                    Smart Grid Safeguard System
+                </h1>
+                <p class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Substation ID: <span class="font-mono text-slate-300 font-semibold">SUB-PUNE-01</span> 
+                    <span class="text-slate-600">|</span> 
+                    Monitoring Division: <span class="text-slate-300">Hinjewadi Sector</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3 text-xs">
+            <div id="connectionStatusBadge" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-emerald-400 font-medium flex items-center gap-2">
+                <i class="fa-solid fa-server"></i>
+                <span id="connectionStatusText">Live Backend Connected</span>
+            </div>
+            
+			<!-- Dark Mode Toggle Button -->
+            <button onclick="toggleDarkMode()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition flex items-center gap-1.5" title="Toggle Theme">
+                <i class="fa-solid fa-moon" id="themeToggleIcon"></i>
+            </button>
+            <button id="toggleDemoBtn" onclick="toggleDemoMode()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-sliders text-slate-400" id="demoToggleIcon"></i>
+                <span>Demo Mode</span>
+            </button>
+
+            <button onclick="triggerReinitData()" class="px-3.5 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                <span>Reset Telemetry</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Operational Workspace -->
+    <main class="flex-1 max-w-[1500px] w-full mx-auto p-5 space-y-6">
+
+        <!-- Critical Theft Warning Banner -->
+        <div id="alertBanner" class="hidden bg-red-100 border border-red-300 rounded-lg p-4 text-red-900 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-red-600 text-white rounded">
+                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-red-900 text-sm flex items-center gap-2">
+                        ATTENTION: Grid Energy Loss / Unauthorized Hooking Detected
+                        <span id="alertCountBadge" class="bg-red-700 text-white text-xs px-2 py-0.5 rounded font-mono">0 Poles</span>
+                    </h3>
+                    <p class="text-xs text-red-700 mt-0.5">
+                        Energy balance mismatch identified between pole transmission sensors and consumer meters.
+                    </p>
+                </div>
+            </div>
+            <button onclick="filterToTheftsOnly()" class="px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded transition flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-filter"></i>
+                <span>Isolate Theft Poles</span>
+            </button>
+        </div>
+
+        <!-- Telemetry Summary Grid (KPIs) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div class="panel-card p-4 flex flex-col justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Monitored Poles</span>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-2xl font-bold font-mono text-slate-900" id="kpiTotalPoles">0</span>
+                    <i class="fa-solid fa-tower-cell text-slate-400"></i>
+                </div>
+                <span class="text-[11px] text-slate-500 mt-2 font-medium">Active Sensors</span>
+            </div>
+            <div class="panel-card p-4 flex flex-col justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Normal Operation</span>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-2xl font-bold font-mono text-emerald-600" id="kpiNormalPoles">0</span>
+                    <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                </div>
+                <span class="text-[11px] text-emerald-700 font-medium mt-2">Balanced Feeder Lines</span>
+            </div>
+            <div class="panel-card p-4 flex flex-col justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Theft Alerts</span>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-2xl font-bold font-mono text-red-600" id="kpiTheftAlerts">0</span>
+                    <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
+                </div>
+                <span class="text-[11px] text-red-700 font-bold mt-2" id="kpiTheftStatusText">Monitoring...</span>
+            </div>
+            <div class="panel-card p-4 flex flex-col justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Total Supplied</span>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold font-mono text-blue-700" id="kpiTotalSupplied">0.00 <span class="text-xs font-normal text-slate-500">kWh</span></span>
+                    <i class="fa-solid fa-bolt text-blue-500"></i>
+                </div>
+                <span class="text-[11px] text-slate-500 mt-2 font-medium">Substation Output</span>
+            </div>
+            <div class="panel-card p-4 flex flex-col justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Total Consumed</span>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold font-mono text-teal-700" id="kpiTotalConsumed">0.00 <span class="text-xs font-normal text-slate-500">kWh</span></span>
+                    <i class="fa-solid fa-house-user text-teal-500"></i>
+                </div>
+                <span class="text-[11px] text-slate-500 mt-2 font-medium">Meter Aggregate</span>
+            </div>
+            <div class="panel-card p-4 flex flex-col justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Line Loss</span>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold font-mono text-amber-600" id="kpiTotalLoss">0.00 <span class="text-xs font-normal text-slate-500">kWh</span></span>
+                    <i class="fa-solid fa-chart-line text-amber-500"></i>
+                </div>
+                <span class="text-[11px] text-slate-500 mt-2 font-medium" id="kpiLossPercentage">0% Mismatch</span>
+            </div>
+        </div>
+
+        <!-- NEW FEATURE: Live Analytics Chart -->
+        <div class="panel-card p-5 mt-2">
+            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
+                <i class="fa-solid fa-chart-column text-blue-600"></i>
+                Live Power Mismatch Analytics
+            </h2>
+            <div class="relative w-full h-[250px]">
+                <canvas id="mismatchChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Monitoring Data Table -->
+        <div class="panel-card space-y-4 p-5 mt-2">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-blue-600"></i>
+                        Distribution Line Monitoring Table
+                    </h2>
+                    <p class="text-xs text-slate-500">Live energy telemetry aggregated from distribution poles and customer smart meters</p>
+                </div>
+
+                <!-- Filters -->
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <div class="relative">
+                        <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Search Pole ID or Location..." 
+                            class="w-64 pl-8 pr-3 py-1.5 rounded bg-white border border-slate-300 text-slate-800 focus:outline-none focus:border-blue-600">
+                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-slate-400"></i>
+                    </div>
+                    <select id="statusFilter" onchange="applyFilters()" class="py-1.5 px-3 rounded bg-white border border-slate-300 text-slate-800 focus:outline-none focus:border-blue-600">
+                        <option value="ALL">All Grid Statuses</option>
+                        <option value="THEFT">Theft Detected Only</option>
+                        <option value="NORMAL">Normal Operation</option>
+                    </select>
+                    <button onclick="resetFilters()" class="px-3 py-1.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 transition" title="Reset Filters">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto rounded border border-slate-300 bg-white">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider border-b border-slate-300">
+                            <th class="p-3">Pole Unique ID</th>
+                            <th class="p-3">Location / Distribution Feeder</th>
+                            <th class="p-3 text-right">Supplied (kWh)</th>
+                            <th class="p-3 text-right">Consumed (kWh)</th>
+                            <th class="p-3 text-right">Loss / Mismatch</th>
+                            <th class="p-3 text-center">Suspected House</th>
+                            <th class="p-3 text-center">Status / Control Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="poleTableBody" class="divide-y divide-slate-200 font-mono text-slate-800">
+                        <!-- Dynamic Rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
+                <div>
+                    Displaying <span id="visibleRowCount" class="font-bold text-slate-800">0</span> distribution poles
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Normal Feed</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Critical Theft</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-300 bg-white py-3 px-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 max-w-[1500px] w-full mx-auto mt-auto">
+        <div>
+            Smart Grid Electricity Theft Detection & Control System | Java Spring Boot
+        </div>
+        <div class="font-mono text-slate-500">
+            Telemetry Endpoint: <span class="text-slate-700">/api/dashboard-data</span>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const API_BASE_URL = "/api";
+        let isDemoMode = false;
+        let isDarkMode = false;
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode');
+            const icon = document.getElementById("themeToggleIcon");
+            if (isDarkMode) {
+                icon.className = "fa-solid fa-sun text-yellow-400";
+            } else {
+                icon.className = "fa-solid fa-moon text-slate-300";
+            }
+          
+            if(typeof renderAnalyticsChart === 'function') {
+                renderAnalyticsChart(); 
+            }
+        }
+        let rawGridData = [];
+        let mismatchChart = null; // Graph ka variable
+
+        // Cut Power Remote Action
+        function cutPower(poleId) {
+            if (confirm(`Are you sure you want to disconnect power supply for Pole ${poleId}?`)) {
+                fetch(API_BASE_URL + '/cut-power/' + poleId)
+                    .then(response => response.text())
+                    .then(data => {
+                        alert(data);
+                        fetchGridData();
+                    })
+                    .catch(error => {
+                        console.error('Error executing power cut:', error);
+                        alert("Error connecting to controller endpoint.");
+                    });
+            }
+        }
+
+        window.onload = function() {
+            fetchGridData();
+            // Data 5 minute (300000ms) tak stable rahega
+            setInterval(() => {
+                if (!isDemoMode) fetchGridData();
+            }, 300000); 
+        };
+
+        async function fetchGridData() {
+            if (isDemoMode) {
+                generateDemoData();
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/dashboard-data`);
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                const data = await response.json();
+                rawGridData = data;
+                updateConnectionStatus(true, "Live Spring Boot API Connected");
+                processAndRenderData();
+            } catch (error) {
+                updateConnectionStatus(false, "Backend Offline - Demo Mode");
+                generateDemoData();
+            }
+        }
+
+        async function triggerReinitData() {
+            if (isDemoMode) {
+                generateDemoData();
+                alert("Demo telemetry re-simulated!");
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/init-real-world`);
+                const msg = await response.text();
+                alert("Grid Simulation Re-initialized: " + msg);
+                fetchGridData();
+            } catch (err) {
+                alert("Failed to re-initialize data.");
+            }
+        }
+
+        function toggleDemoMode() {
+            isDemoMode = !isDemoMode;
+            const icon = document.getElementById("demoToggleIcon");
+            if (isDemoMode) {
+                icon.className = "fa-solid fa-sliders text-blue-400";
+                updateConnectionStatus(false, "Demo Mode Active");
+                generateDemoData();
+            } else {
+                icon.className = "fa-solid fa-sliders text-slate-400";
+                fetchGridData();
+            }
+        }
+
+        function generateDemoData() {
+            let demoData = [];
+            let poleCounter = 5001;
+            const areas = ["Hinjewadi Phase 1 DP", "Hinjewadi Phase 2 DP", "Hinjewadi Phase 3 DP", "Blue Ridge Feeder", "Megapolis Substation"];
+
+            areas.forEach((dp) => {
+                for (let i = 1; i <= 10; i++) {
+                    const poleId = "POL-" + poleCounter++;
+                    const location = `${dp} - Pole ${i}`;
+                    const consumed = parseFloat((80 + Math.random() * 15).toFixed(2));
+                    let supplied, suspectMeterId = "None", isTheft = false;
+
+                    if (Math.random() < 0.15) {
+                        supplied = parseFloat((consumed + 15 + Math.random() * 30).toFixed(2));
+                        isTheft = true;
+                        // Naya Unique MTR ID Generator
+                        let randomHouseNum = Math.floor(Math.random() * 3) + 1;
+                        let randomMeterId = "MTR-" + Math.floor(1000 + Math.random() * 9000);
+                        suspectMeterId = `${randomMeterId} (House ${randomHouseNum})`;
+                    } else {
+                        supplied = parseFloat((consumed + 0.5 + Math.random() * 2).toFixed(2));
+                    }
+
+                    demoData.push({
+                        poleUniqueId: poleId, poleLocation: location,
+                        suppliedPower: supplied, consumedPower: consumed,
+                        powerLoss: parseFloat((supplied - consumed).toFixed(2)),
+                        theftDetected: isTheft, suspectedMeter: suspectMeterId
+                    });
+                }
+            });
+            rawGridData = demoData;
+            processAndRenderData();
+        }
+        function updateConnectionStatus(isLive, text) {
+            const badge = document.getElementById("connectionStatusBadge");
+            document.getElementById("connectionStatusText").innerText = text;
+            badge.className = isLive ? "px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-emerald-400 font-medium flex items-center gap-2" : "px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-medium flex items-center gap-2";
+        }
+
+        function processAndRenderData() {
+            calculateKPIs();
+            applyFilters();
+            renderAnalyticsChart(); // Naya Chart Function yahan call hoga
+        }
+
+        // NEW: Chart generation logic
+        function renderAnalyticsChart() {
+            const ctx = document.getElementById('mismatchChart').getContext('2d');
+            
+            // X-Axis Labels (Pole IDs)
+            const labels = rawGridData.map(pole => pole.poleUniqueId || pole.poleLocation.split(' - ')[1]);
+            // Y-Axis Data (Power Loss value)
+            const dataVals = rawGridData.map(pole => pole.powerLoss);
+            // Dynamic Color (Red if theft, Green if normal)
+            const colors = rawGridData.map(pole => pole.theftDetected ? 'rgba(220, 38, 38, 0.7)' : 'rgba(16, 185, 129, 0.7)');
+            const borderColors = rawGridData.map(pole => pole.theftDetected ? 'rgba(220, 38, 38, 1)' : 'rgba(16, 185, 129, 1)');
+
+            if (mismatchChart) {
+                mismatchChart.destroy(); // Purana chart hatau
+            }
+
+            mismatchChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Power Mismatch (kWh)',
+                        data: dataVals,
+                        backgroundColor: colors,
+                        borderColor: borderColors,
+                        borderWidth: 1,
+                        borderRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false }, // Bottom labels chhupaye hain taki clean dikhe
+                        y: { 
+                            beginAtZero: true,
+                            title: { display: true, text: 'Loss Units (kWh)', color: '#64748b' },
+                            grid: { color: '#e2e8f0' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function calculateKPIs() {
+            let totalSupplied = 0, totalConsumed = 0, totalLoss = 0, theftAlertsCount = 0, normalPolesCount = 0;
+            rawGridData.forEach(item => {
+                totalSupplied += item.suppliedPower;
+                totalConsumed += item.consumedPower;
+                totalLoss += item.powerLoss;
+                item.theftDetected ? theftAlertsCount++ : normalPolesCount++;
+            });
+
+            document.getElementById("kpiTotalPoles").innerText = rawGridData.length;
+            document.getElementById("kpiNormalPoles").innerText = normalPolesCount;
+            document.getElementById("kpiTheftAlerts").innerText = theftAlertsCount;
+            document.getElementById("kpiTotalSupplied").innerHTML = `${totalSupplied.toFixed(2)} <span class="text-xs font-normal text-slate-500">kWh</span>`;
+            document.getElementById("kpiTotalConsumed").innerHTML = `${totalConsumed.toFixed(2)} <span class="text-xs font-normal text-slate-500">kWh</span>`;
+            document.getElementById("kpiTotalLoss").innerHTML = `${totalLoss.toFixed(2)} <span class="text-xs font-normal text-slate-500">kWh</span>`;
+            
+            const lossPct = totalSupplied > 0 ? ((totalLoss / totalSupplied) * 100).toFixed(1) : 0;
+            document.getElementById("kpiLossPercentage").innerText = `${lossPct}% Overall Loss`;
+
+            const alertBanner = document.getElementById("alertBanner");
+            const kpiStatusText = document.getElementById("kpiTheftStatusText");
+            if (theftAlertsCount > 0) {
+                alertBanner.classList.remove("hidden");
+                document.getElementById("alertCountBadge").innerText = `${theftAlertsCount} Poles Mismatched`;
+                kpiStatusText.innerText = `${theftAlertsCount} Alerts Detected`;
+                kpiStatusText.className = "text-[11px] text-red-600 font-bold mt-2";
+            } else {
+                alertBanner.classList.add("hidden");
+                kpiStatusText.innerText = "Feeder Lines Balanced";
+                kpiStatusText.className = "text-[11px] text-emerald-600 font-bold mt-2";
+            }
+        }
+
+        function renderTable(dataToRender) {
+            const tbody = document.getElementById("poleTableBody");
+            tbody.innerHTML = "";
+            document.getElementById("visibleRowCount").innerText = dataToRender.length;
+
+            if (dataToRender.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">No records matching filter.</td></tr>`;
+                return;
+            }
+
+            dataToRender.forEach(pole => {
+                const tr = document.createElement("tr");
+                tr.className = pole.theftDetected ? "bg-red-50 hover:bg-red-100 text-slate-900 border-l-4 border-l-red-600" : "hover:bg-slate-50 text-slate-800";
+
+                let suspectInfo = (pole.theftDetected && pole.suspectedMeter && pole.suspectedMeter !== "None") 
+                    ? `<span class="px-2 py-1 rounded text-[11px] font-bold bg-red-200 text-red-800 border border-red-400"><i class="fa-solid fa-house-circle-exclamation"></i> ${pole.suspectedMeter}</span>` 
+                    : `<span class="text-slate-400">-</span>`;
+
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-blue-700">${pole.poleUniqueId || (pole.poleLocation.split(' - ')[1] ? "POL-" + (5000 + parseInt(pole.poleLocation.split(' - ')[1].replace('Pole ',''))) : pole.poleLocation)}</td>
+                    <td class="p-3 text-slate-700 font-sans font-medium">${pole.poleLocation}</td>
+                    <td class="p-3 text-right font-semibold">${pole.suppliedPower.toFixed(2)}</td>
+                    <td class="p-3 text-right font-semibold text-emerald-700">${pole.consumedPower.toFixed(2)}</td>
+                    <td class="p-3 text-right font-bold ${pole.theftDetected ? 'text-red-600' : 'text-amber-600'}">${pole.powerLoss.toFixed(2)}</td>
+                    <td class="p-3 text-center font-sans">${suspectInfo}</td>
+                    <td class="p-3 text-center font-sans">
+                        ${pole.theftDetected ? 
+                            `<div class="flex items-center justify-center gap-2">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 border border-red-300 text-red-700">THEFT DETECTED</span>
+                                <button onclick="cutPower('${pole.poleUniqueId || pole.poleLocation}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold rounded shadow transition flex items-center gap-1"><i class="fa-solid fa-power-off"></i> Disconnect</button>
+                             </div>` : 
+                            `<span class="px-2.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 border border-emerald-300 text-emerald-800">NORMAL</span>`
+                        }
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function applyFilters() {
+            const searchValue = document.getElementById("searchInput").value.toLowerCase();
+            const statusValue = document.getElementById("statusFilter").value;
+            const filtered = rawGridData.filter(pole => {
+                const matchesSearch = (pole.poleUniqueId && pole.poleUniqueId.toLowerCase().includes(searchValue)) || pole.poleLocation.toLowerCase().includes(searchValue);
+                let matchesStatus = true;
+                if (statusValue === "THEFT") matchesStatus = pole.theftDetected === true;
+                if (statusValue === "NORMAL") matchesStatus = pole.theftDetected === false;
+                return matchesSearch && matchesStatus;
+            });
+            renderTable(filtered);
+        }
+
+        function resetFilters() {
+            document.getElementById("searchInput").value = "";
+            document.getElementById("statusFilter").value = "ALL";
+            applyFilters();
+        }
+        function filterToTheftsOnly() {
+            document.getElementById("statusFilter").value = "THEFT";
+            applyFilters();
+        }
+    </script>
+</body>
+</html>
